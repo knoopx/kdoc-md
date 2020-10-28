@@ -142,7 +142,7 @@ function generateMarkdown(data) {
             markdown += "## ";
         else markdown += "### ";
 
-        markdown += data[i].name + ((data[i].type.length > 0) && " `" + data[i].type.join("` `") + "`") + "\n\n";
+        markdown += data[i].name + (data[i].type.length > 0 ? " `" + data[i].type.join("` `") + "`" : "") + "\n\n";
 
 
         markdown += data[i].description + "\n";
