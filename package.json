@@ -1,0 +1,10 @@
+{
+  "name": "kdoc-md",
+  "version": "1.0.0",
+  "main": "index.js",
+  "bin": "./index.js",
+  "license": "MIT",
+  "dependencies": {
+    "fast-glob": "^3.2.4"
+  }
+}
