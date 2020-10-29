@@ -182,6 +182,11 @@ const [, , ...params] = argv;
 
     for await (const entry of stream) {
         const data = parseFile(entry)
+
+        if (data.length === 0) {
+            continue;
+        }
+
         const parentDir = path.dirname(path.resolve(entry).slice(path.resolve(sourcePath).length + 1))
         const basename = path.basename(entry, path.extname(entry)) + ".md"
 
