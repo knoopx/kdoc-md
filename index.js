@@ -30,10 +30,11 @@ function parsePhrase(phrase) {
     }
 }
 
-function parseFile(file, prefix, options) {
+function parseFile(file) {
     let docs = [];
-
+    
     let content = fs.readFileSync(file, "utf8");
+
     let reg = /(?<=\s\/\*\*\s)([\s\S]*?)(?=\s\*\/\s)/g;
     let match;
     while ((match = reg.exec(content)) !== null) {
@@ -49,13 +50,13 @@ function parseFile(file, prefix, options) {
 
         while (declaration.trim().startsWith("@")) {
             type = type.concat("@" + (/([A-Z0-9a-z]*)/g).exec(declaration.trim().substring(1))[1]);
-
             startIndex += declaration.length + 1;
             declaration = content.substring(startIndex, startIndex + content.substring(startIndex).indexOf("\n"));
         }
 
-        const matches = (/([A-Za-z0-9\s]*)/g).exec(declaration.trim());
-        type = type.concat(matches[1].trim().split(" "));
+        const signature = declaration.trim().match(/^[^\(]+/)[0] || ""
+        const matches = Array.from(signature.matchAll(/(([A-Za-z0-9\.\@](\<[^\>]+\>)?)+)/g)).map(x => x[0].trim())
+        type = type.concat(matches);
 
         let doc = {
             name: type.pop(),
@@ -178,14 +179,22 @@ const [, , ...params] = argv;
 
 (async (sourcePath, destPath) => {
     const tree = {}
-    const stream = glob.stream([path.join(sourcePath, '**/*.kt')]);
+    const globExpr = path.join(sourcePath, '**/*.kt')
+    console.log(`Searching ${globExpr}...`)
+    const stream = glob.stream([globExpr]);
 
     for await (const entry of stream) {
+        console.log(`Processing ${entry}`)
         const data = parseFile(entry)
-
+        // console.log(`  ${data.length} documentation blocks found`)
         if (data.length === 0) {
+            console.log("  no doc blocks found.")
             continue;
-        }
+        } 
+
+        data.forEach(doc => {
+            console.log(`  ${doc.type.map(util.inspect).join(" ")} ${doc.name}`)
+        })
 
         const parentDir = path.dirname(path.resolve(entry).slice(path.resolve(sourcePath).length + 1))
         const basename = path.basename(entry, path.extname(entry)) + ".md"
