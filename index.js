@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const util = require("util")
 const fs = require("fs")
 const path = require("path")
 const glob = require("fast-glob");
@@ -32,14 +33,18 @@ function parsePhrase(phrase) {
 function parseFile(file, prefix, options) {
     let docs = [];
 
-    let content = fs.readFileSync(path.resolve(file), "utf8");
+    let content = fs.readFileSync(file, "utf8");
     let reg = /(?<=\s\/\*\*\s)([\s\S]*?)(?=\s\*\/\s)/g;
     let match;
     while ((match = reg.exec(content)) !== null) {
         let matchText = match[0];
         let startIndex = match.index + match[0].length;
         startIndex += content.substring(startIndex).indexOf("\n") + 1;
-        let declaration = content.substring(startIndex, startIndex + content.substring(startIndex).indexOf("\n"));
+        let endIndex = content.substring(startIndex).indexOf("\n")
+        if (endIndex == -1) {
+            endIndex = content.length - startIndex
+        }
+        let declaration = content.substring(startIndex, startIndex + endIndex);
         let type = [];
 
         while (declaration.trim().startsWith("@")) {
@@ -49,7 +54,8 @@ function parseFile(file, prefix, options) {
             declaration = content.substring(startIndex, startIndex + content.substring(startIndex).indexOf("\n"));
         }
 
-        type = type.concat((/([A-Z0-9a-z\.\<\> ]*)/g).exec(declaration.trim())[1].trim().split(" "));
+        const matches = (/([A-Za-z0-9\s]*)/g).exec(declaration.trim());
+        type = type.concat(matches[1].trim().split(" "));
 
         let doc = {
             name: type.pop(),
