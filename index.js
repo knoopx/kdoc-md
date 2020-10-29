@@ -171,7 +171,7 @@ function generateMarkdown(data) {
         }
     }
 
-    return markdown;
+    return markdown.replace(/[\n]{2,}/g, "\n\n");
 }
 
 const [, , ...params] = argv;
