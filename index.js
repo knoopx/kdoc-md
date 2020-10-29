@@ -55,7 +55,7 @@ function parseFile(file) {
         }
 
         const signature = declaration.trim().match(/^[^\(]+/)[0] || ""
-        const matches = Array.from(signature.matchAll(/(([A-Za-z0-9\.\@](\<[^\>]+\>)?)+)/g)).map(x => x[0].trim())
+        const matches = Array.from(signature.matchAll(/(\<[^\>]*\>|[A-Za-z0-9\.\@]+(\<[^\>]*\>)?)+/g)).map(x => x[0].trim())
         type = type.concat(matches);
 
         let doc = {
