@@ -7,32 +7,49 @@ const glob = require("fast-glob");
 const { argv } = require("process");
 
 const TAGS = {
-    author: ["Name"],
-    version: ["Current Version"],
-    param: ["Parameter Name", "Description"],
-    "return": ["Returned Value"],
-    exception: ["Exception", "Description"],
-    throws: ["Exception", "Description"],
-    see: ["Reference"],
-    link: ["Reference"],
-    since: ["Version"],
-    deprecated: ["Deprecation"]
+    "author": ["Name"],
+    "version": ["Current Version"],
+    "param": ["Parameter Name", "Description"],
+    "property": ["Property Name", "Description"],
+    "return": ["Returned Value", "Description"],
+    "exception": ["Exception", "Description"],
+    "throws": ["Exception", "Description"],
+    "see": ["Reference"],
+    "link": ["Reference"],
+    "since": ["Version"],
+    "deprecated": ["Deprecation"]
 }
 
-function parsePhrase(phrase) {
-    let tag = phrase.shift();
-    if ((tag == "see" || tag == "link") && phrase.length == 2) {
-        let strings = phrase.shift().split("#");
-        return "[" + phrase.join(" ") + "](" + "#" + strings[1] + ")";
-    } else {
-        phrase.shift();
-        return phrase.join(" ");
-    }
+const indent = (text, w, char = " ") => {
+    return text.split("\n").map(line => char.repeat(w) + line).join("\n")
 }
+
+function parseTags(block) {
+    return block.replace(/\{@[^\s]+\s+([^}]+)\}/g, "_$1_")
+}
+
+function splitTail(string, regex, max) {
+    parts = []
+
+    current = string
+    while (parts.length < max - 1) {
+        const index = current.search(regex) // ?
+        if (index === -1) {
+            break
+        }
+        parts.push(current.substring(0, index));
+        current = current.substring(index + 1);
+    }
+
+    parts.push(current)
+
+    return parts
+}
+
 
 function parseFile(file) {
     let docs = [];
-    
+
     let content = fs.readFileSync(file, "utf8");
 
     let reg = /(?<=\s\/\*\*\s)([\s\S]*?)(?=\s\*\/\s)/g;
@@ -61,80 +78,27 @@ function parseFile(file) {
         let doc = {
             name: type.pop(),
             description: "",
-            type: type,
+            type,
+            ...Object.keys(TAGS).reduce((rest, tag) => ({
+                ...rest,
+                [tag]: []
+            }), {})
         };
 
-        let tag = null;
-        let lines = matchText.split("\n");
-        for (let i in lines) {
-            let line = lines[i].replace(/(\s)*(\*)(\s)*/g, "");
-            if (line.startsWith("@")) {
-                let spaceIndex = line.search(/[ \t]/);
-                tag = line.substring(1, spaceIndex);
-                line = line.substring(spaceIndex + 1);
-                let phrase = null;
-                if (TAGS[tag]) {
-                    let object = {
-                        template: TAGS[tag],
-                        values: []
-                    };
-
-                    let words = line.split(/[ \t]{1,}/g);
-                    for (let word in words) {
-                        if (phrase) {
-                            if (words[word].endsWith("}")) {
-                                phrase.push(words[word].substring(0, words[word].length - 1));
-                                object.values[object.values.length - 1] += " " + parsePhrase(phrase);
-                                phrase = null;
-                            } else {
-                                phrase.push(words[word]);
-                            }
-                        } else if (words[word].startsWith("{")) {
-                            phrase = [words[word].substring(1)];
-                        } else {
-                            if (object.values.length < TAGS[tag].length)
-                                object.values.push(words[word]);
-                            else object.values[object.values.length - 1] += " " + words[word];
-                        }
-                    }
-
-                    if (doc[tag])
-                        doc[tag].push(object);
-                    else doc[tag] = [object];
-                } else tag = null;
-            } else if (tag) {
-                let object = doc[tag][doc[tag].length - 1];
-                let words = line.split(/[ \t]{1,}/g);
-                for (let word in words) {
-                    if (object.values.length < TAGS[tag].length)
-                        object.values.push(words[word]);
-                    else object.values[object.values.length - 1] += " " + words[word];
+        lines = matchText.split("\n")
+            .map(l => l.replace(/\s*\*\s*/g, ""))
+            .map(line => {
+                if (line.startsWith("@")) {
+                    const [tag, rest] = splitTail(line.substring(1), /\s/, 2)
+                    const parts = splitTail(rest, /\s/, TAGS[tag].length)
+                    doc[tag].push(parts);
+                } else {
+                    return parseTags(line)
                 }
-            } else {
-                if (line.trim().length > 0) {
-                    let words = line.trim().split(/[\s]{1,}/g);
-                    let phrase = null;
-                    for (let word in words) {
-                        if (phrase !== null) {
-                            if (words[word].includes("}")) {
-                                phrase.push(words[word].substring(0, words[word].indexOf("}")));
-                                doc.description += parsePhrase(phrase);
-                                phrase = null;
-                            } else {
-                                phrase.push(words[word]);
-                            }
-                        } else if (words[word].startsWith("{@")) {
-                            phrase = [words[word].substring(2)];
-                        } else {
-                            doc.description += words[word] + " ";
-                        }
-                    }
-                }
+            })
+            .filter(Boolean)
 
-                doc.description += "\n";
-            }
-        }
-
+        doc.description = lines.join("\n").trim()
         docs.push(doc);
     }
 
@@ -150,23 +114,21 @@ function generateMarkdown(data) {
         else markdown += "### ";
 
         markdown += data[i].name + (data[i].type.length > 0 ? " `" + data[i].type.join("` `") + "`" : "") + "\n\n";
-
-
         markdown += data[i].description + "\n";
 
         for (let tag in TAGS) {
             if (data[i][tag] && data[i][tag].length > 0) {
-                let isTable = TAGS[tag].length > 1;
-                if (isTable) {
+                if (TAGS[tag].length > 1) {
                     markdown += "\n| " + TAGS[tag].join(" | ") + " |\n";
                     markdown += "|" + "-----|".repeat(TAGS[tag].length) + "\n";
-                } else markdown += "\n**" + TAGS[tag][0] + ":** ";
-
-                for (let item in data[i][tag]) {
-                    if (isTable)
-                        markdown += "| " + data[i][tag][item].values.map(x => x.trim()).join(" | ") + " |\n";
-                    else markdown += data[i][tag][item].values[0] + "\n\n";
+                    for (let item in data[i][tag]) {
+                        markdown += "| " + data[i][tag][item].map(x => x.trim()).join(" | ") + " |\n";
+                    }
+                } else {
+                    markdown += "\n**" + TAGS[tag][0] + ":** ";
+                    markdown += data[i][tag][item][0] + "\n\n";
                 }
+
             }
             markdown += "\n";
         }
@@ -186,14 +148,23 @@ const [, , ...params] = argv;
     for await (const entry of stream) {
         console.log(`Processing ${entry}`)
         const data = parseFile(entry)
-        // console.log(`  ${data.length} documentation blocks found`)
+
         if (data.length === 0) {
             console.log("  no doc blocks found.")
             continue;
-        } 
+        }
 
         data.forEach(doc => {
-            console.log(`  ${doc.type.map(util.inspect).join(" ")} ${doc.name}`)
+            const leading = doc.type.includes("class") ? "  " : "    "
+            console.log(`${leading}${doc.type.map(util.inspect).join(" ")} ${doc.name}`)
+            Object.keys(TAGS).forEach(tag => {
+                if (doc[tag].length) {
+                    doc[tag].forEach(([name, desc]) => {
+                        console.log(`${leading}@${tag} ${util.inspect(name)} ${desc}`)
+                    })
+                }
+            })
+            console.log(indent(doc.description, leading.length) + "\n")
         })
 
         const parentDir = path.dirname(path.resolve(entry).slice(path.resolve(sourcePath).length + 1))
@@ -209,6 +180,7 @@ const [, , ...params] = argv;
         fs.mkdirSync(path.dirname(targetPath), { recursive: true })
         const markdown = `# ${path.join(parentDir, path.basename(entry))}\n\n` + generateMarkdown(data)
         fs.writeFileSync(targetPath, markdown)
+        console.log()
     }
 
     let data = "# Files\n\n"
