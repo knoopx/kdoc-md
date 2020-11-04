@@ -18,6 +18,10 @@ const indent = (text, w, char = " ") => {
     .join("\n")
 }
 
+function packageNameFromPath(string) {
+  return string.replace(new RegExp(path.sep, "g"), ".")
+}
+
 const [, , ...params] = argv
 
 ;(async (sourcePath, destPath) => {
@@ -91,8 +95,7 @@ const [, , ...params] = argv
     .sort()
     .forEach((parentDir) => {
       const types = packages[parentDir]
-      const files = tree[parentDir]
-      const packageName = parentDir.replace(new RegExp(path.sep, "g"), ".")
+      const packageName = packageNameFromPath(parentDir)
 
       if (Object.keys(types).length) {
         data += `## ${packageName}\n\n`
@@ -103,18 +106,22 @@ const [, , ...params] = argv
           types[type].doc.description.split("\n").filter(Boolean)[0],
         ])
         data += `${table([["Name", "Description"], ...rows])}\n`
-
-        data += `### Files\n\n`
-
-        data += `${table([
-          ["Name", "Directory"],
-          ...files.map((entry) => [
-            `[${path.basename(entry.source)}](${entry.path})`,
-            path.dirname(entry.source),
-          ]),
-        ])}\n`
       }
     })
+
+  data += "# Files\n\n"
+
+  data += `${table([
+    ["Name", "Package"],
+    ...Object.keys(tree)
+      .sort()
+      .flatMap((parentDir) => {
+        return tree[parentDir].map((entry) => [
+          `[${path.basename(entry.source)}](${entry.path})`,
+          packageNameFromPath(parentDir),
+        ])
+      }),
+  ])}\n`
 
   const targetPath = path.join(destPath, "README.md")
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
