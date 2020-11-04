@@ -92,7 +92,7 @@ const [, , ...params] = argv
     .forEach((parentDir) => {
       const types = packages[parentDir]
       const files = tree[parentDir]
-      const packageName = parentDir.replaceAll(path.sep, ".")
+      const packageName = parentDir.replace(new RegExp(path.sep, "g"), ".")
 
       if (Object.keys(types).length) {
         data += `## ${packageName}\n\n`
