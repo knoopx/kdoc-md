@@ -1,0 +1,15 @@
+<% identifiers.forEach((identifier) => { -%>
+<%= identifier.type.includes("class") ? "##" : "###" %> <%= identifier.name %><% if (identifier.type.length > 0) { %><% identifier.type.map(t => { %> <%= code(t) %><% }) %><% } %>
+
+<%= identifier.description %>
+<% if (identifier.tags.length > 0) { %>
+<%= table([
+  ["Type", "Name", "Description"],
+  ...identifier.tags.map((tag) => [
+    tag.tag,
+    code(tag.name),
+    tag.description,
+  ])
+]) %>
+<% } %>
+<% }) %>

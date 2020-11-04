@@ -1,0 +1,18 @@
+# Index
+
+# Packages
+<% packages.forEach((package) => { %>
+## <%= package.name %>
+
+<%= table([
+    ["Name", "Description"],
+    ...package.types.map((type) => [link(type.name, type.path) , type.summary])
+]) %>
+<% }) %>
+
+# Files
+
+<%= table([
+    ["Name", "Package"],
+    ...files.map((entry) => [link(entry.name, entry.path), entry.packageName])
+]) %>
