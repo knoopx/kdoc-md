@@ -1,66 +1,122 @@
 #!/usr/bin/env node
+/* eslint-disable no-console */
 
 const util = require("util")
 const fs = require("fs")
 const path = require("path")
-const glob = require("fast-glob");
-const { argv } = require("process");
+const { argv } = require("process")
+
+const table = require("gfm-table")
+const glob = require("fast-glob")
+
 const { generateMarkdown, parseDocBlocks } = require("./lib/support")
 
 const indent = (text, w, char = " ") => {
-    return text.split("\n").map(line => char.repeat(w) + line).join("\n")
+  return text
+    .split("\n")
+    .map((line) => char.repeat(w) + line)
+    .join("\n")
 }
 
-const [, , ...params] = argv;
+const [, , ...params] = argv
 
-(async (sourcePath, destPath) => {
-    const tree = {}
-    const globExpr = path.join(sourcePath, '**/*.kt')
-    console.log(`Searching ${globExpr}...`)
-    const stream = glob.stream([globExpr]);
+;(async (sourcePath, destPath) => {
+  const tree = {}
+  const packages = {}
 
-    for await (const file of stream) {
-        console.log(`Processing ${file}`)
-        const data = parseDocBlocks(fs.readFileSync(file, "utf8"))
+  const globExpr = path.join(sourcePath, "**/*.kt")
+  console.log(`Searching ${globExpr}...`)
+  const stream = glob.stream([globExpr])
 
-        if (data.length === 0) {
-            console.log("  no doc blocks found.")
-            continue;
-        }
+  for await (const file of stream) {
+    console.log(`Processing ${file}`)
+    const data = parseDocBlocks(fs.readFileSync(file, "utf8"))
 
-        data.forEach(doc => {
-            const leading = doc.type.includes("class") ? "  " : "    "
-            console.log(`${leading}${doc.type.map(util.inspect).join(" ")} ${doc.name}`)
-            doc.tags.forEach(tag => {
-                console.log(`${leading}@${tag.tag} ${util.inspect(tag.name)} ${tag.description}`)
-            })
-            console.log(indent(doc.description, leading.length) + "\n")
-        })
-
-        const parentDir = path.dirname(path.resolve(file).slice(path.resolve(sourcePath).length + 1))
-        const basename = path.basename(file, path.extname(file)) + ".md"
-
-        if (!tree[parentDir]) tree[parentDir] = []
-        tree[parentDir].push({
-            doc: path.join(parentDir, basename),
-            source: path.join(parentDir, path.basename(file))
-        })
-
-        const targetPath = path.join(destPath, path.join(parentDir, basename))
-        fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-        const markdown = `# ${path.join(parentDir, path.basename(file))}\n\n` + generateMarkdown(data)
-        fs.writeFileSync(targetPath, markdown)
-        console.log()
+    if (data.length === 0) {
+      console.log("  no doc blocks found.")
+      continue
     }
 
-    let data = "# Files\n\n"
+    const parentDir = path.dirname(
+      path.resolve(file).slice(path.resolve(sourcePath).length + 1),
+    )
+    const basename = `${path.basename(file, path.extname(file))}.md`
 
-    Object.keys(tree).sort().reverse().forEach((dirname) => {
-        tree[dirname].sort().forEach((entry) => {
-            data += `* [${entry.source}](${entry.doc})\n`
-        })
+    if (!packages[parentDir]) {
+      packages[parentDir] = {}
+    }
+
+    data.forEach((doc) => {
+      if (doc.type.includes("class")) {
+        packages[parentDir][doc.name] = {
+          doc,
+          path: path.join(parentDir, basename),
+          source: path.join(parentDir, path.basename(file)),
+        }
+      }
+
+      const leading = doc.type.includes("class") ? "  " : "    "
+      console.log(
+        `${leading}${doc.type.map(util.inspect).join(" ")} ${doc.name}`,
+      )
+      doc.tags.forEach((tag) => {
+        console.log(
+          `${leading}@${tag.tag} ${util.inspect(tag.name)} ${tag.description}`,
+        )
+      })
+      console.log(`${indent(doc.description, leading.length)}\n`)
     })
-    const targetPath = path.join(destPath, "README.md")
+
+    if (!tree[parentDir]) tree[parentDir] = []
+    tree[parentDir].push({
+      path: path.join(parentDir, basename),
+      source: path.join(parentDir, path.basename(file)),
+    })
+
+    const targetPath = path.join(destPath, path.join(parentDir, basename))
     fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-    fs.writeFileSync(targetPath, data)
+    const markdown = `# ${path.join(
+      parentDir,
+      path.basename(file),
+    )}\n\n${generateMarkdown(data)}`
+    fs.writeFileSync(targetPath, markdown)
+    console.log()
+  }
+
+  let data = "# Index\n\n"
+
+  data += "\n\n# Packages\n\n"
+
+  Object.keys(packages)
+    .sort()
+    .forEach((parentDir) => {
+      const types = packages[parentDir]
+      const files = tree[parentDir]
+      const packageName = parentDir.replaceAll(path.sep, ".")
+
+      if (Object.keys(types).length) {
+        data += `## ${packageName}\n\n`
+        data += `### Types\n\n`
+
+        const rows = Object.keys(types).map((type) => [
+          `[${type}](${types[type].path})`,
+          types[type].doc.description.split("\n").filter(Boolean)[0],
+        ])
+        data += `${table([["Name", "Description"], ...rows])}\n`
+
+        data += `### Files\n\n`
+
+        data += `${table([
+          ["Name", "Directory"],
+          ...files.map((entry) => [
+            `[${path.basename(entry.source)}](${entry.path})`,
+            path.dirname(entry.source),
+          ]),
+        ])}\n`
+      }
+    })
+
+  const targetPath = path.join(destPath, "README.md")
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+  fs.writeFileSync(targetPath, data)
 })(...params)
