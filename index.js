@@ -6,6 +6,7 @@ const fs = require("fs")
 const Path = require("path")
 const { argv } = require("process")
 
+const firstBy = require("thenby")
 const glob = require("fast-glob")
 
 const { parseDocBlocks } = require("./lib/parsing")
@@ -74,7 +75,12 @@ const [, , ...params] = argv
       const targetPath = Path.join(destPath, Path.join(parentDir, basename))
       fs.mkdirSync(Path.dirname(targetPath), { recursive: true })
 
-      const markdown = render("templates/PACKAGE.md.ejs", { identifiers })
+      const markdown = render(
+        Path.join(__dirname, "templates/PACKAGE.md.ejs"),
+        {
+          identifiers,
+        },
+      )
 
       fs.writeFileSync(targetPath, markdown)
       console.log()
@@ -83,14 +89,17 @@ const [, , ...params] = argv
     }
   })
 
-  const data = render("templates/README.md.ejs", {
-    files: Object.values(treeMap).flatMap((x) => x),
+  const data = render(Path.join(__dirname, "templates/README.md.ejs"), {
+    files: Object.values(treeMap)
+      .flatMap((x) => x)
+      .sort(firstBy("packageName").thenBy("name")),
     packages: Object.values(packageMap)
       .map((pkg) => ({
         ...pkg,
         types: Object.values(pkg.types),
       }))
-      .filter(({ types }) => types.length > 0),
+      .filter(({ types }) => types.length > 0)
+      .sort(firstBy("packageName").thenBy("name")),
   })
 
   const targetPath = Path.join(destPath, "README.md")
